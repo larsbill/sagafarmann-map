@@ -1,5 +1,3 @@
-// components/map/Map.tsx
-
 'use client';
 
 import { useRef, useEffect } from 'react';
@@ -7,7 +5,7 @@ import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
 import XYZ from 'ol/source/XYZ';
-import { transformExtent, fromLonLat } from 'ol/proj';
+import { fromLonLat } from 'ol/proj';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import Feature from 'ol/Feature';
@@ -33,30 +31,16 @@ export default function WorldMap({ data }: WorldMapProps) {
   useEffect(() => {
     if (!mapRef.current || !popupRef.current) return;
 
-    const europeBbox4326: [number, number, number, number] = [
-      -35.58, 24.6, 44.83, 84.73,
-    ];
-    const europeExtent = transformExtent(
-      europeBbox4326,
-      'EPSG:4326',
-      'EPSG:3857'
-    );
-
     const raster = new TileLayer({
-      preload: 256,
-      cacheSize: 1024,
       source: new XYZ({
         url:
           'https://{a-c}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
         attributions: '© OpenStreetMap contributors © CARTO',
-        transition: 0,
       }),
     });
 
     const view = new View({
       projection: 'EPSG:3857',
-      extent: europeExtent,
-      constrainOnlyCenter: false,
       center: fromLonLat([4.5, 55]),
       zoom: 4,
       minZoom: 2,
@@ -66,7 +50,6 @@ export default function WorldMap({ data }: WorldMapProps) {
       target: mapRef.current,
       layers: [raster],
       view,
-      maxTilesLoading: 32,
       controls: [],
     });
 
@@ -76,58 +59,59 @@ export default function WorldMap({ data }: WorldMapProps) {
     });
     map.addOverlay(overlay);
 
-    const sorted = [...data].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
+    if (data.length > 0) {
+      const sorted = [...data].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
 
-    const pointStyle = new Style({
-      image: new CircleStyle({
-        radius: 5,
-        fill: new Fill({ color: '#f5f5f5' }),
-        stroke: new Stroke({ width: 2, color: 'black' }),
-      }),
-    });
-    const lineStyle = new Style({
-      stroke: new Stroke({ width: 3, color: '#c41c2d' }),
-    });
+      const pointStyle = new Style({
+        image: new CircleStyle({
+          radius: 5,
+          fill: new Fill({ color: '#f5f5f5' }),
+          stroke: new Stroke({ width: 2, color: 'black' }),
+        }),
+      });
+      const lineStyle = new Style({
+        stroke: new Stroke({ width: 3, color: '#c41c2d' }),
+      });
 
-    const pointFeatures = sorted.map((pt) => {
-      const coords = fromLonLat([pt.longitude, pt.latitude]);
-      const feat = new Feature(new Point(coords));
-      feat.setStyle(pointStyle);
-      feat.set('data', pt);
-      return feat;
-    });
+      const pointFeatures = sorted.map((pt) => {
+        const feat = new Feature(new Point(fromLonLat([pt.longitude, pt.latitude])));
+        feat.setStyle(pointStyle);
+        feat.set('data', pt);
+        return feat;
+      });
 
-    const lineCoords = sorted.map((pt) =>
-      fromLonLat([pt.longitude, pt.latitude])
-    );
-    const lineFeature = new Feature(new LineString(lineCoords));
-    lineFeature.setStyle(lineStyle);
+      const features: Feature[] = [...pointFeatures];
+      if (sorted.length >= 2) {
+        const lineCoords = sorted.map((pt) =>
+          fromLonLat([pt.longitude, pt.latitude])
+        );
+        const lineFeat = new Feature(new LineString(lineCoords));
+        lineFeat.setStyle(lineStyle);
+        features.push(lineFeat);
+      }
 
-    const vectorSource = new VectorSource({
-      features: [...pointFeatures, lineFeature],
-    });
-    const vectorLayer = new VectorLayer({
-      source: vectorSource,
-      updateWhileAnimating: true,
-      updateWhileInteracting: true,
-    });
-    map.addLayer(vectorLayer);
+      const vectorSource = new VectorSource({ features });
+      const vectorLayer = new VectorLayer({
+        source: vectorSource,
+        updateWhileAnimating: true,
+        updateWhileInteracting: true,
+      });
+      map.addLayer(vectorLayer);
 
-    // Fit view to data extent
-    const extent = vectorSource.getExtent();
-    if (extent.every((c) => !isNaN(c))) {
-      view.fit(extent, { padding: [40, 40, 40, 40], maxZoom: 12 });
+      // 6. Fit view to data
+      const extent = vectorSource.getExtent();
+      if (extent.every((c) => !isNaN(c))) {
+        view.fit(extent, { padding: [40, 40, 40, 40], maxZoom: 12 });
+      }
     }
 
-    // Click handler for popup
     map.on('singleclick', (evt) => {
       const feat = map.forEachFeatureAtPixel(evt.pixel, (f) => f);
       if (feat && feat.get('data')) {
         const coords = (feat.getGeometry() as Point).getCoordinates();
         const pt: LiveData = feat.get('data');
-
         const formattedDate = new Date(pt.date).toLocaleString(undefined, {
           year: 'numeric',
           month: 'short',
