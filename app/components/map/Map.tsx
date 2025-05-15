@@ -26,10 +26,9 @@ type WorldMapProps = {
 
 export default function WorldMap({ data }: WorldMapProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const popupRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!mapRef.current || !popupRef.current) return;
+    if (!mapRef.current) return;
 
     const raster = new TileLayer({
       source: new XYZ({
@@ -38,14 +37,12 @@ export default function WorldMap({ data }: WorldMapProps) {
         attributions: '© OpenStreetMap contributors © CARTO',
       }),
     });
-
     const view = new View({
       projection: 'EPSG:3857',
       center: fromLonLat([4.5, 55]),
-      zoom: 4,
+      zoom: 18,
       minZoom: 2,
     });
-
     const map = new Map({
       target: mapRef.current,
       layers: [raster],
@@ -53,118 +50,102 @@ export default function WorldMap({ data }: WorldMapProps) {
       controls: [],
     });
 
-    const overlay = new Overlay({
-      element: popupRef.current,
-      autoPan: true,
-    });
-    map.addOverlay(overlay);
-
     if (data.length > 0) {
       const sorted = [...data].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
       );
 
-      const pointStyle = new Style({
+      const defaultStyle = new Style({
         image: new CircleStyle({
-          radius: 5,
-          fill: new Fill({ color: '#f5f5f5' }),
-          stroke: new Stroke({ width: 2, color: 'black' }),
+          radius: 6,
+          fill: new Fill({ color: '#c41c2d' }),
         }),
       });
       const lineStyle = new Style({
-        stroke: new Stroke({ width: 3, color: '#c41c2d' }),
+        fill: new Fill({ color: 'white' }),
+        stroke: new Stroke({ width: 3, color: 'black' }),
       });
 
-      const pointFeatures = sorted.map((pt) => {
+      const features: Feature<Point | LineString>[] = sorted.map((pt) => {
         const feat = new Feature(new Point(fromLonLat([pt.longitude, pt.latitude])));
-        feat.setStyle(pointStyle);
         feat.set('data', pt);
+        feat.setId(pt.id);
+        feat.setStyle(defaultStyle);
         return feat;
       });
 
-      const features: Feature[] = [...pointFeatures];
       if (sorted.length >= 2) {
-        const lineCoords = sorted.map((pt) =>
-          fromLonLat([pt.longitude, pt.latitude])
-        );
-        const lineFeat = new Feature(new LineString(lineCoords));
-        lineFeat.setStyle(lineStyle);
-        features.push(lineFeat);
+        const coords = sorted.map((pt) => fromLonLat([pt.longitude, pt.latitude]));
+        const line = new Feature(new LineString(coords));
+        line.setStyle(lineStyle);
+        features.push(line);
       }
 
-      const vectorSource = new VectorSource({ features });
-      const vectorLayer = new VectorLayer({
-        source: vectorSource,
+      const source = new VectorSource({ features });
+      const layer = new VectorLayer({
+        source,
         updateWhileAnimating: true,
         updateWhileInteracting: true,
       });
-      map.addLayer(vectorLayer);
+      map.addLayer(layer);
 
-      // 6. Fit view to data
-      const extent = vectorSource.getExtent();
-      if (extent.every((c) => !isNaN(c))) {
-        view.fit(extent, { padding: [40, 40, 40, 40], maxZoom: 12 });
-      }
-    }
+      const extent = source.getExtent();
 
-    map.on('singleclick', (evt) => {
-      const feat = map.forEachFeatureAtPixel(evt.pixel, (f) => f);
-      if (feat && feat.get('data')) {
-        const coords = (feat.getGeometry() as Point).getCoordinates();
-        const pt: LiveData = feat.get('data');
-        const formattedDate = new Date(pt.date).toLocaleString(undefined, {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
+      const params = new URLSearchParams(window.location.search);
+      const markerId = params.get('marker');
 
-        popupRef.current!.innerHTML = `
-          <div class="p-3 flex-1 pb-2">
-            <ul class="divide-y divide-border">
-              <li class="flex justify-between items-center py-2 gap-8">
-                <span class="text-foreground/80 font-medium">Speed</span>
-                <span class="font-semibold">${pt.speed} km/h</span>
-              </li>
-              <li class="flex justify-between items-center py-2 gap-8">
-                <span class="text-foreground/80 font-medium">Course</span>
-                <span class="font-semibold">${pt.course}°</span>
-              </li>
-              <li class="flex justify-between items-center py-2 gap-8">
-                <span class="text-foreground/80 font-medium">Temperature</span>
-                <span class="font-semibold">${pt.temperature}°C</span>
-              </li>
-            </ul>
-            <div class="pt-1 text-xs text-foreground/25 text-center">
-              ${formattedDate}
-            </div>
-          </div>
-        `;
-        overlay.setPosition(coords);
+      if (markerId) {
+        const feature = source.getFeatureById(markerId);
+        if (feature) {
+          const geom = feature.getGeometry() as Point;
+          const coord = geom.getCoordinates();
+          view.setCenter(coord);
+          view.setZoom(Math.min(view.getMaxZoom() || 12, 12));
+        } else {
+          view.fit(extent, { padding: [40, 40, 40, 40], maxZoom: 20 });
+        }
       } else {
-        overlay.setPosition(undefined);
+        view.fit(extent, { padding: [40, 40, 40, 40], maxZoom: 20 });
       }
-    });
+
+      // ping overlay for last point
+      const lastPt = sorted[sorted.length - 1];
+      const lastCoord = fromLonLat([lastPt.longitude, lastPt.latitude]);
+      const pingEl = document.createElement('div');
+      pingEl.className = 'relative flex items-center justify-center';
+      pingEl.innerHTML = `
+        <span class="absolute inline-flex h-4 w-4 rounded-full bg-primary opacity-75 animate-[ping_3s_ease-in-out_infinite]"></span>
+        <span class="relative inline-flex rounded-full h-4 w-4 bg-primary"></span>
+      `;
+      const pingOverlay = new Overlay({
+        element: pingEl,
+        positioning: 'center-center',
+        stopEvent: false,
+      });
+      map.addOverlay(pingOverlay);
+      pingOverlay.setPosition(lastCoord);
+
+      // click handler to recentre + update URL
+      map.on('singleclick', (evt) => {
+        const hitTolerance = 8;
+        const feat = map.forEachFeatureAtPixel(evt.pixel, (f) => f, { hitTolerance });
+        if (feat?.get('data')) {
+          const pt = feat.get('data') as LiveData;
+          view.animate({
+            center: evt.coordinate,
+            duration: 1000,
+          });
+          window.history.pushState({}, '', `?marker=${encodeURIComponent(pt.id)}`);
+        } else {
+          window.history.pushState({}, '', window.location.pathname);
+        }
+      });
+    }
 
     return () => {
       map.setTarget(undefined);
     };
   }, [data]);
 
-  return (
-    <div className="relative w-full h-full">
-      <div ref={mapRef} className="w-full h-full" />
-      <div
-        ref={popupRef}
-        className="
-          absolute
-          bg-background
-          rounded-md
-          shadow-md
-          pointer-events-auto
-        "
-      />
-    </div>
-  );
+  return <div ref={mapRef} className="w-full h-full" />;
 }
