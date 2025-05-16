@@ -1,4 +1,4 @@
-import WorldMap from "./components/map/Map";
+import { MapContainer } from "./components/map/MapContainer";
 import { LiveData } from "./types";
 
 export default async function Home() {
@@ -15,7 +15,7 @@ export default async function Home() {
 
   return (
     <div className="w-full h-full">
-      <WorldMap data={liveData} />
+      <MapContainer data={liveData} />
     </div>
   );
 }

@@ -108,7 +108,6 @@ export default function WorldMap({ data }: WorldMapProps) {
         view.fit(extent, { padding: [40, 40, 40, 40], maxZoom: 20 });
       }
 
-      // ping overlay for last point
       const lastPt = sorted[sorted.length - 1];
       const lastCoord = fromLonLat([lastPt.longitude, lastPt.latitude]);
       const pingEl = document.createElement('div');
@@ -125,7 +124,6 @@ export default function WorldMap({ data }: WorldMapProps) {
       map.addOverlay(pingOverlay);
       pingOverlay.setPosition(lastCoord);
 
-      // click handler to recentre + update URL
       map.on('singleclick', (evt) => {
         const hitTolerance = 8;
         const feat = map.forEachFeatureAtPixel(evt.pixel, (f) => f, { hitTolerance });
@@ -133,7 +131,7 @@ export default function WorldMap({ data }: WorldMapProps) {
           const pt = feat.get('data') as LiveData;
           view.animate({
             center: evt.coordinate,
-            duration: 1000,
+            duration: 500,
           });
           window.history.pushState({}, '', `?marker=${encodeURIComponent(pt.id)}`);
         } else {
