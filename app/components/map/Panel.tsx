@@ -82,7 +82,7 @@ export function InfoPanel({
               <div className="text-sm font-medium">Speed</div>
               <div className="flex items-baseline space-x-1">
                 <span className="text-lg">{liveData.speed}</span>
-                <span className="text-sm text-muted-foreground">km/h</span>
+                <span className="text-sm text-muted-foreground">knots</span>
               </div>
             </div>
           </div>
@@ -102,7 +102,7 @@ export function InfoPanel({
               <div className="text-sm font-medium">Avg Speed</div>
               <div className="flex items-baseline space-x-1">
                 <span className="text-lg">{liveData.average_speed}</span>
-                <span className="text-sm text-muted-foreground">km/h</span>
+                <span className="text-sm text-muted-foreground">knots</span>
               </div>
             </div>
           </div>

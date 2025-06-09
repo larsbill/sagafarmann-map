@@ -16,6 +16,7 @@ import Stroke from 'ol/style/Stroke';
 import CircleStyle from 'ol/style/Circle';
 import Fill from 'ol/style/Fill';
 import Overlay from 'ol/Overlay';
+import { defaults as defaultInteractions } from 'ol/interaction';
 import 'ol/ol.css';
 
 import { LiveData } from '../../types';
@@ -48,6 +49,10 @@ export default function WorldMap({ data }: WorldMapProps) {
       layers: [raster],
       view,
       controls: [],
+      interactions: defaultInteractions({
+        altShiftDragRotate: false,
+        pinchRotate: false,
+      }),
     });
 
     if (data.length > 0) {
@@ -129,8 +134,21 @@ export default function WorldMap({ data }: WorldMapProps) {
         const feat = map.forEachFeatureAtPixel(evt.pixel, (f) => f, { hitTolerance });
         if (feat?.get('data')) {
           const pt = feat.get('data') as LiveData;
+
+          let centerCoord = evt.coordinate;
+
+          if (window.innerWidth <= 768) {
+            const resolution = view.getResolution();
+            if (resolution) {
+              centerCoord = [
+                evt.coordinate[0],
+                evt.coordinate[1] - resolution * 200,
+              ];
+            }
+          }
+
           view.animate({
-            center: evt.coordinate,
+            center: centerCoord,
             duration: 500,
           });
           window.history.pushState({}, '', `?marker=${encodeURIComponent(pt.id)}`);
