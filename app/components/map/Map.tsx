@@ -20,6 +20,7 @@ import { defaults as defaultInteractions } from 'ol/interaction';
 import 'ol/ol.css';
 
 import { LiveData } from '../../types';
+import { MapAttribution } from './MapAttribution';
 
 type WorldMapProps = {
   data: LiveData[];
@@ -34,7 +35,7 @@ export default function WorldMap({ data }: WorldMapProps) {
     const raster = new TileLayer({
       source: new XYZ({
         url:
-          'https://{a-c}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+          'https://{a-c}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_4auk_1_ab5aebd2fbbf3ca245e67f42',
         attributions: '© OpenStreetMap contributors © CARTO',
       }),
     });
@@ -163,5 +164,10 @@ export default function WorldMap({ data }: WorldMapProps) {
     };
   }, [data]);
 
-  return <div ref={mapRef} className="w-full h-full" />;
+  return (
+    <div className="relative w-full h-full">
+      <div ref={mapRef} className="w-full h-full" />
+      <MapAttribution />
+    </div>
+  );
 }
